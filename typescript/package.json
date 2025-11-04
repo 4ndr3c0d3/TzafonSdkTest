@@ -1,0 +1,26 @@
+{
+  "name": "tzafon-automation-typescript",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc -p .",
+    "start": "tsx src/index.ts",
+    "wiki": "tsx src/wikipedia.ts",
+    "nytimes": "tsx src/nytimes.ts",
+    "airbnb": "tsx src/airbnb.ts",
+    "github": "tsx src/github.ts",
+    "reddit": "tsx src/reddit.ts",
+    "concurrent:10": "tsx src/concurrent10.ts",
+    "concurrent:50": "tsx src/concurrent50.ts"
+  },
+  "dependencies": {
+    "tzafon": "^0.0.0"
+  },
+  "devDependencies": {
+    "tsx": "^4.19.0",
+    "typescript": "^5.4.0",
+    "dotenv": "^16.4.0"
+  }
+}
+
