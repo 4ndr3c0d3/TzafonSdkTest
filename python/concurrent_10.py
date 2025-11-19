@@ -2,7 +2,8 @@ import os
 import random
 import argparse
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+import asyncio
+import traceback
 from typing import List, Tuple, Dict
 
 from tzafon import Computer
@@ -21,20 +22,17 @@ URLS = [
 def _select_site_arg(site: str | None) -> Tuple[str, str]:
     label_to_url: Dict[str, str] = {k: v for k, v in URLS}
     if site:
-        # Allow label or full URL
         if site in label_to_url:
             return site, label_to_url[site]
         if site.startswith("http://") or site.startswith("https://"):
-            # Derive a label from hostname
+            from urllib.parse import urlparse
             try:
-                from urllib.parse import urlparse
-
                 host = urlparse(site).hostname or "site"
                 label = host.split(".")[-2] if "." in host else host
             except Exception:
                 label = "site"
             return label, site
-    # Interactive prompt
+
     print("Choose a site to screenshot concurrently (10 shots):")
     for idx, (lbl, url) in enumerate(URLS, start=1):
         print(f"  {idx}. {lbl} -> {url}")
@@ -49,14 +47,16 @@ def _select_site_arg(site: str | None) -> Tuple[str, str]:
 
 def _cleanup(client: object, c: object) -> None:
     for obj in (c, client):
-        for name in ("close", "quit", "shutdown", "destroy", "stop", "end", "exit", "delete", "dispose"):
+        for name in (
+            "close", "quit", "shutdown", "destroy", "stop", "end", "exit", "delete", "dispose"
+        ):
             try:
                 fn = getattr(obj, name, None)
                 if callable(fn):
                     fn()
             except Exception:
                 pass
-    # Try client.delete(computer) or client.delete(id)
+
     try:
         delete = getattr(client, "delete", None)
         if callable(delete):
@@ -78,14 +78,13 @@ def _create_browser_with_retry(client: object, retries: int = 6) -> object:
     for attempt in range(retries):
         try:
             return client.create(kind="browser")
-        except Exception as e:  # Handle 429 concurrent limit with backoff
+        except Exception as e:
             msg = str(e).lower()
             if "429" in msg or "concurrent" in msg or "limit" in msg:
                 time.sleep(delay)
                 delay = min(delay * 2, 30.0)
                 continue
             raise
-    # Final attempt (let exception bubble if any)
     return client.create(kind="browser")
 
 
@@ -119,47 +118,65 @@ def _take_one(i: int, label: str, url: str, client: object | None = None) -> str
         _cleanup(client, c)
 
 
-def run(n: int = 10, site: str | None = None, mode: str = "sequential") -> List[str]:
+# --- ASYNC VERSION BELOW ---
+
+async def _take_one_async(i: int, label: str, url: str, client: object | None = None) -> str:
+    """Run _take_one in a separate thread so asyncio can manage concurrency."""
+    return await asyncio.to_thread(_take_one, i, label, url, client)
+
+
+async def run_async(n: int = 10, site: str | None = None, concurrency_limit: int = 5) -> List[str]:
+    """Run up to n concurrent tasks using asyncio with a concurrency limit."""
     label, url = _select_site_arg(site)
     imgs: List[str] = []
-    if mode == "concurrent":
-        with ThreadPoolExecutor(max_workers=n) as ex:
-            shared_client = Computer()
-            futures = [ex.submit(_take_one, i, label, url, shared_client) for i in range(n)]
-            for f in as_completed(futures):
-                try:
-                    imgs.append(f.result())
-                except Exception as e:
-                    print(f"Worker failed: {e}")
-    else:
-        shared_client = Computer()
-        for i in range(n):
-            delay = 2.0
-            attempts = 0
-            while True:
-                try:
-                    imgs.append(_take_one(i, label, url, shared_client))
-                    break
-                except Exception as e:
-                    if _is_capacity_error(e) and attempts < 12:
-                        attempts += 1
-                        print(f"Capacity limit; retrying iteration {i} after {delay:.1f}s (attempt {attempts}/12)")
-                        import time as _t
-                        _t.sleep(delay)
-                        delay = min(delay * 1.7, 60.0)
-                        continue
-                    print(f"Iteration {i} failed: {e}")
-                    break
+    sem = asyncio.Semaphore(concurrency_limit)
+    shared_client = Computer()
+
+    async def worker(i: int):
+        delay = 2.0
+        attempts = 0
+        while True:
+            try:
+                async with sem:
+                    return await _take_one_async(i, label, url, shared_client)
+            except Exception as e:
+                # Print full traceback
+                print(f"\n❌ Full error traceback for worker {i}:")
+                traceback.print_exc()
+
+                # Handle retry on capacity limit
+                if _is_capacity_error(e) and attempts < 12:
+                    attempts += 1
+                    print(f"⚠️ Capacity limit; retrying iteration {i} after {delay:.1f}s (attempt {attempts}/12)")
+                    await asyncio.sleep(delay)
+                    delay = min(delay * 1.7, 60.0)
+                    continue
+
+                print(f"⚠️ Worker {i} failed permanently after {attempts} retries.")
+                return ""
+
+    # Run all workers concurrently, collecting results
+    tasks = [worker(i) for i in range(n)]
+    for coro in asyncio.as_completed(tasks):
+        try:
+            result = await coro
+            if result:
+                imgs.append(result)
+        except Exception:
+            print("\n❌ Unhandled top-level exception in a worker:")
+            traceback.print_exc()
+            # continue to next worker
+
     return imgs
 
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Take 10 screenshots of a chosen site (sequential by default).")
+    parser = argparse.ArgumentParser(description="Take 10 screenshots concurrently using asyncio.")
     parser.add_argument("--site", help="Site label (wikipedia, nytimes, airbnb, github, reddit) or full URL", default=None)
     parser.add_argument("--n", type=int, help="Number of screenshots", default=10)
-    parser.add_argument("--mode", choices=["sequential", "concurrent"], default="sequential", help="Execution mode")
+    parser.add_argument("--limit", type=int, help="Concurrent limit", default=5)
     args = parser.parse_args()
 
-    paths = run(args.n, args.site, args.mode)
-    for p in paths:
-        print(f"Saved: {p}")
+    imgs = asyncio.run(run_async(args.n, args.site, args.limit))
+    for p in imgs:
+        print(f"✅ Saved: {p}")
