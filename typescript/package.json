@@ -6,21 +6,27 @@
   "scripts": {
     "build": "tsc -p .",
     "start": "tsx src/index.ts",
+    "playwright:install": "playwright install",
     "wiki": "tsx src/wikipedia.ts",
     "nytimes": "tsx src/nytimes.ts",
     "airbnb": "tsx src/airbnb.ts",
     "github": "tsx src/github.ts",
     "reddit": "tsx src/reddit.ts",
     "concurrent:10": "tsx src/concurrent10.ts",
-    "concurrent:50": "tsx src/concurrent50.ts"
+    "concurrent:50": "tsx src/concurrent50.ts",
+    "service:browser": "tsx src/services/browserService.ts",
+    "gateway": "tsx src/main.ts",
+    "service:python": "python ../python/service.py",
+    "service:py-playwright": "python ../python/playwright_service.py",
+    "menu": "tsx src/menu.ts"
   },
-  "dependencies": {
-    "tzafon": "^0.0.0"
+  "optionalDependencies": {
+    "tzafon": "^1.13.0"
   },
   "devDependencies": {
+    "dotenv": "^16.4.0",
+    "playwright": "^1.56.1",
     "tsx": "^4.19.0",
-    "typescript": "^5.4.0",
-    "dotenv": "^16.4.0"
+    "typescript": "^5.4.0"
   }
 }
-

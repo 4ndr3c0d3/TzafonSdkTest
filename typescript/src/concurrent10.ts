@@ -3,6 +3,7 @@ import path from 'node:path';
 import { ensureDir, timestamp, downloadToFile } from './utils.js';
 import readline from 'node:readline/promises';
 import { stdin as input, stdout as output } from 'node:process';
+import pLimit from 'p-limit';
 
 const URLS: [string, string][] = [
   ['wikipedia', 'https://www.wikipedia.org/'],
@@ -13,14 +14,23 @@ const URLS: [string, string][] = [
 ];
 
 async function worker(i: number, label: string, url: string, total?: number) {
-  const outDir = path.join(path.dirname(new URL(import.meta.url).pathname), `../results/concurrent_10_${label}`);
+  const outDir = path.join(
+    path.dirname(new URL(import.meta.url).pathname),
+    `../results/concurrent_10_${label}`
+  );
   ensureDir(outDir);
+
   const client = new (Computer as any)();
   const computer = await client.create({ kind: 'browser' });
   await computer.navigate(url);
-  try { await computer.wait(2); } catch {}
+
+  try {
+    await computer.wait(2);
+  } catch {}
+
   const result = await computer.screenshot();
   const shotUrl = (result as any)?.result?.screenshot_url as string | undefined;
+
   if (shotUrl) {
     const img = path.join(outDir, `${timestamp(`${label}_${i}_`)}.png`);
     await downloadToFile(shotUrl, img);
@@ -47,11 +57,13 @@ function pickLabelUrl(site?: string): [string, string] {
         const host = u.hostname;
         const label = host.includes('.') ? host.split('.').slice(-2, -1)[0] : host;
         return [label || 'site', site];
-      } catch { /* fallthrough */ }
+      } catch {
+        /* fallthrough */
+      }
       return ['site', site];
     }
   }
-  return ['',''];
+  return ['', ''];
 }
 
 async function chooseSiteInteractive(): Promise<[string, string]> {
@@ -72,12 +84,23 @@ async function run(n = 10) {
   if (!label || !url) {
     [label, url] = await chooseSiteInteractive();
   }
-  const tasks = Array.from({ length: n }, (_, i) => worker(i, label, url, n));
+
+  // ✅ Control concurrency here
+  const concurrency = 3; // You can tune this (2–5 is ideal)
+  const limit = pLimit(concurrency);
+
+  const tasks = Array.from({ length: n }, (_, i) =>
+    limit(() => worker(i, label, url, n))
+  );
+
   const results = await Promise.allSettled(tasks);
+
   for (const r of results) {
     if (r.status === 'fulfilled') console.log(`Saved: ${r.value}`);
     else console.warn('Worker failed:', r.reason);
   }
+
+  console.log(`\n✅ Completed ${n} screenshots with concurrency=${concurrency}`);
 }
 
 run(10);

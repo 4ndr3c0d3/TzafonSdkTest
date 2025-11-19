@@ -7,6 +7,7 @@ Install
 Automations (immediate execution)
 - `npm run wiki`
 - `npm run nytimes`
+  - Add `-- --engine=tzafon` (default) or `-- --engine=playwright` to choose the browser engine. Example: `npm run nytimes -- --engine=playwright`.
 - `npm run airbnb`
 - `npm run github`
 - `npm run reddit`
@@ -17,4 +18,3 @@ Concurrency
 
 Results
 - Screenshots saved under `typescript/results/…` with timestamped filenames.
-
