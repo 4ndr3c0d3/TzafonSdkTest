@@ -113,6 +113,8 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, result);
     }
 
+    // multitab endpoint removed to keep browser service simple
+
     // Proxy CDP operations to Python CDP service
     if (method === 'POST' && url.pathname === '/cdp/create') {
       const body = await readJson(req);

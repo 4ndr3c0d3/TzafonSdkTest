@@ -15,6 +15,7 @@
     "concurrent:10": "tsx src/concurrent10.ts",
     "concurrent:50": "tsx src/concurrent50.ts",
     "service:browser": "tsx src/services/browserService.ts",
+    "service:tzafon": "tsx src/services/tzafonService.ts",
     "gateway": "tsx src/main.ts",
     "service:python": "python ../python/service.py",
     "service:py-playwright": "python ../python/playwright_service.py",
