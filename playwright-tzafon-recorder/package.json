@@ -1,0 +1,22 @@
+{
+  "name": "playwright-tzafon-recorder",
+  "version": "1.0.0",
+  "description": "Standalone Playwright + Preact recorder that emits tzafon-style steps.",
+  "type": "module",
+  "scripts": {
+    "service:recorder": "tsx src/services/recorderService.ts",
+    "playwright:install": "playwright install"
+  },
+  "keywords": [
+    "playwright",
+    "recorder",
+    "tzafon"
+  ],
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "playwright": "^1.57.0",
+    "tsx": "^4.20.6",
+    "typescript": "^5.9.3"
+  }
+}
